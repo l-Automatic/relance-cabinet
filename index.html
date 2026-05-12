@@ -141,7 +141,9 @@
   .send-feedback { font-size: 12px; font-weight: 600; margin-top: 8px; padding: 5px 10px; border-radius: 6px; display: inline-block; }
   .send-feedback-ok  { background: #D1FAE5; color: #065F46; }
   .send-feedback-err { background: #FEE2E2; color: #991B1B; }
-  #demoEmailInput { background: transparent; border: none; border-bottom: 1px dashed #92400E; color: #92400E; font-size: 12px; font-weight: 700; outline: none; width: 200px; text-align: center; }
+  #demoEmailInput, #demoPrenomInput { background: transparent; border: none; border-bottom: 1px dashed #92400E; color: #92400E; font-size: 12px; font-weight: 700; outline: none; text-align: center; }
+  #demoPrenomInput { width: 160px; margin-right: 12px; }
+  #demoEmailInput { width: 200px; }
 
   /* ===== SCROLLBAR ===== */
   ::-webkit-scrollbar { width: 6px; }
@@ -170,7 +172,8 @@
 
 <!-- DEMO BANNER -->
 <div class="demo-banner" id="demoBanner">
-  Mode démo actif — email de test :
+  Saisissez votre prénom et email pour recevoir l'email de test &nbsp;—&nbsp;
+  <input id="demoPrenomInput" type="text" placeholder="Votre prénom (obligatoire)" title="Prénom affiché dans l'email de test">
   <input id="demoEmailInput" type="email" value="demo@cabinet-test.fr" title="Cliquez pour modifier l'email de test">
   / tél : <strong id="demoBannerPhone"></strong>
 </div>
@@ -778,11 +781,19 @@ async function sendEmail(type) {
   feedback.className = 'send-feedback';
   feedback.textContent = '';
 
+  const demoPrenomInput = document.getElementById('demoPrenomInput');
   const demoEmailInput = document.getElementById('demoEmailInput');
+
+  if (demoMode && !demoPrenomInput?.value?.trim()) {
+    feedback.textContent = 'Merci de saisir votre prénom en mode démo';
+    feedback.className = 'send-feedback send-feedback-err';
+    return;
+  }
+
+  const prenom = demoMode ? demoPrenomInput.value.trim() : c.nom;
   const recipient = demoMode ? (demoEmailInput?.value?.trim() || DEMO_EMAIL) : c.email;
   const finalMessage = demoMode ? `⚠️ CECI EST UN EMAIL DE TEST — Mode démo actif\n\n${message}` : message;
   const subject = `Relance ${TYPE_LABELS[type]} — ${c.nom}`;
-
   const originalHTML = btn.innerHTML;
   btn.disabled = true;
   btn.textContent = 'Envoi…';
@@ -797,7 +808,7 @@ async function sendEmail(type) {
             sourceURL: 'https://dashboard-cabinet.netlify.app',
             fields: [
               {},
-              { value: demoMode ? 'Testeur Démo' : c.nom }
+              { value: prenom }
             ]
           },
           relance: { subject, message: finalMessage }
