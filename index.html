@@ -415,7 +415,7 @@
 // ===== CONFIGURATION =====
 const DEMO_EMAIL = 'demo@cabinet-test.fr';
 const DEMO_PHONE = '+33600000000';
-const CLAUDE_API_KEY = '';        // TODO: clé API Anthropic
+// CLAUDE_API_KEY : définie dans les variables d'environnement Netlify (jamais dans le code)
 const N8N_WEBHOOK_URL = '';       // TODO: URL webhook n8n SMTP
 const TWILIO_ACCOUNT_SID = '';    // TODO: SID Twilio
 const TWILIO_AUTH_TOKEN = '';     // TODO: token Twilio
@@ -717,28 +717,14 @@ Rédige le message de relance.`;
 }
 
 async function callClaudeAPI(system, user) {
-  if (!CLAUDE_API_KEY) throw new Error('CLAUDE_API_KEY non configurée dans les constantes du fichier');
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch('/api/claude', {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': CLAUDE_API_KEY,
-      'anthropic-version': '2023-06-01',
-      'anthropic-dangerous-direct-browser-calls': 'true'
-    },
-    body: JSON.stringify({
-      model: 'claude-sonnet-4-20250514',
-      max_tokens: 512,
-      system,
-      messages: [{ role: 'user', content: user }]
-    })
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ system, user })
   });
-  if (!response.ok) {
-    const err = await response.json().catch(() => ({}));
-    throw new Error(err?.error?.message || `Erreur API (${response.status})`);
-  }
   const data = await response.json();
-  return data.content?.[0]?.text || '';
+  if (!response.ok) throw new Error(data?.error || `Erreur serveur (${response.status})`);
+  return data.text || '';
 }
 
 async function generateMessage(type) {
