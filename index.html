@@ -1,0 +1,785 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Relance Cabinet — Assistant IA</title>
+<style>
+  /* ===== RESET & BASE ===== */
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #F8F9FA; color: #1A2332; font-size: 14px; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+
+  /* ===== HEADER ===== */
+  .header { background: #fff; border-bottom: 1px solid #E5E7EB; padding: 0 24px; height: 56px; display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; z-index: 10; }
+  .header-brand { display: flex; align-items: center; gap: 10px; }
+  .header-brand .logo { width: 32px; height: 32px; background: #1D9E75; border-radius: 8px; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: 700; font-size: 16px; }
+  .header-brand h1 { font-size: 16px; font-weight: 600; color: #1A2332; }
+  .header-brand span { font-size: 12px; color: #6B7280; margin-left: 4px; font-weight: 400; }
+  .header-actions { display: flex; align-items: center; gap: 16px; }
+  .demo-toggle-wrap { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; color: #6B7280; }
+  .toggle-switch { position: relative; width: 40px; height: 22px; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: #D1D5DB; border-radius: 22px; cursor: pointer; transition: background .2s; }
+  .toggle-slider::before { content: ''; position: absolute; width: 16px; height: 16px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: transform .2s; }
+  .toggle-switch input:checked + .toggle-slider { background: #BA7517; }
+  .toggle-switch input:checked + .toggle-slider::before { transform: translateX(18px); }
+  .demo-label { transition: color .2s; }
+  .demo-active-text { color: #BA7517; font-weight: 600; }
+
+  /* ===== DEMO BANNER ===== */
+  .demo-banner { background: #FEF3C7; border-bottom: 1px solid #FCD34D; color: #92400E; font-size: 12px; font-weight: 500; padding: 6px 24px; text-align: center; display: none; flex-shrink: 0; }
+  .demo-banner.visible { display: block; }
+
+  /* ===== APP BODY ===== */
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ===== SIDEBAR ===== */
+  .sidebar { width: 260px; flex-shrink: 0; background: #fff; border-right: 1px solid #E5E7EB; display: flex; flex-direction: column; overflow: hidden; }
+  .sidebar-header { padding: 16px; border-bottom: 1px solid #E5E7EB; }
+  .sidebar-title { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em; color: #9CA3AF; margin-bottom: 10px; }
+  .search-box { position: relative; }
+  .search-box input { width: 100%; padding: 8px 10px 8px 32px; border: 1px solid #E5E7EB; border-radius: 8px; font-size: 13px; color: #1A2332; background: #F8F9FA; outline: none; transition: border-color .15s; }
+  .search-box input:focus { border-color: #1D9E75; background: #fff; }
+  .search-box svg { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); color: #9CA3AF; pointer-events: none; }
+  .client-list { flex: 1; overflow-y: auto; padding: 8px; }
+  .client-item { padding: 12px; border-radius: 10px; cursor: pointer; transition: background .15s; margin-bottom: 2px; }
+  .client-item:hover { background: #F3FAF7; }
+  .client-item.active { background: #ECFDF5; border: 1px solid #A7F3D0; }
+  .client-item-name { font-weight: 600; font-size: 13px; color: #1A2332; margin-bottom: 4px; }
+  .client-item-sub { font-size: 11px; color: #6B7280; margin-bottom: 6px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 20px; font-size: 11px; font-weight: 600; }
+  .badge-pending { background: #FEF3C7; color: #92400E; }
+  .badge-ok { background: #D1FAE5; color: #065F46; }
+  .badge-noreply { background: #FEE2E2; color: #991B1B; }
+
+  /* ===== MAIN ===== */
+  .main { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ===== CLIENT CARD ===== */
+  .client-card { background: #fff; border-bottom: 1px solid #E5E7EB; padding: 20px 24px; flex-shrink: 0; overflow-y: auto; max-height: 52%; }
+  .no-selection { display: flex; align-items: center; justify-content: center; height: 100%; color: #9CA3AF; font-size: 15px; }
+  .card-top { display: flex; align-items: flex-start; justify-content: space-between; margin-bottom: 16px; }
+  .card-name { font-size: 20px; font-weight: 700; color: #1A2332; }
+  .card-meta { font-size: 13px; color: #6B7280; margin-top: 2px; }
+  .card-status-badge { }
+  .card-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .field-group { display: flex; flex-direction: column; gap: 4px; }
+  .field-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #9CA3AF; }
+  .field-value { font-size: 13px; color: #1A2332; }
+  .editable-field { display: flex; align-items: center; gap: 6px; }
+  .editable-field input { border: none; background: transparent; font-size: 13px; color: #1A2332; outline: none; width: 100%; cursor: default; }
+  .editable-field input.editing { background: #F0FDF4; border: 1px solid #1D9E75; border-radius: 6px; padding: 3px 7px; cursor: text; }
+  .edit-btn { background: none; border: none; cursor: pointer; color: #9CA3AF; padding: 2px; border-radius: 4px; display: flex; align-items: center; transition: color .15s; }
+  .edit-btn:hover { color: #1D9E75; }
+  .card-controls { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  .ton-selector { display: flex; gap: 6px; }
+  .ton-btn { flex: 1; padding: 6px 4px; border: 1px solid #E5E7EB; border-radius: 8px; background: #fff; font-size: 12px; font-weight: 500; color: #6B7280; cursor: pointer; transition: all .15s; text-align: center; }
+  .ton-btn.active { background: #1D9E75; color: #fff; border-color: #1D9E75; }
+  .ton-btn:hover:not(.active) { border-color: #1D9E75; color: #1D9E75; }
+  .ai-instructions textarea { width: 100%; border: 1px solid #E5E7EB; border-radius: 8px; padding: 8px 10px; font-size: 13px; color: #1A2332; resize: none; outline: none; font-family: inherit; height: 56px; transition: border-color .15s; }
+  .ai-instructions textarea:focus { border-color: #1D9E75; }
+
+  /* ===== HISTORY TABLE ===== */
+  .history-section { margin-top: 4px; }
+  .section-title { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .07em; color: #9CA3AF; margin-bottom: 8px; }
+  .history-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .history-table th { text-align: left; padding: 6px 8px; color: #9CA3AF; font-weight: 600; border-bottom: 1px solid #F3F4F6; }
+  .history-table td { padding: 7px 8px; border-bottom: 1px solid #F9FAFB; color: #374151; }
+  .history-table tr:last-child td { border-bottom: none; }
+  .resp-badge { display: inline-block; padding: 2px 7px; border-radius: 10px; font-size: 11px; font-weight: 500; }
+  .resp-yes { background: #D1FAE5; color: #065F46; }
+  .resp-no { background: #FEE2E2; color: #991B1B; }
+  .resp-pending { background: #F3F4F6; color: #6B7280; }
+
+  /* ===== RELANCE PANEL ===== */
+  .relance-panel { flex: 1; background: #F8F9FA; display: flex; flex-direction: column; overflow: hidden; }
+  .tabs-header { display: flex; background: #fff; border-bottom: 1px solid #E5E7EB; padding: 0 24px; flex-shrink: 0; }
+  .tab-btn { padding: 14px 16px; font-size: 13px; font-weight: 500; color: #6B7280; border: none; background: none; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; transition: all .15s; white-space: nowrap; }
+  .tab-btn.active { color: #1D9E75; border-bottom-color: #1D9E75; }
+  .tab-btn:hover:not(.active) { color: #374151; }
+  .tabs-content { flex: 1; overflow-y: auto; padding: 20px 24px; }
+  .tab-panel { display: none; }
+  .tab-panel.active { display: block; }
+
+  /* ===== TAB INNER ===== */
+  .preview-area { margin-top: 14px; }
+  .preview-area textarea { width: 100%; border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 14px; font-size: 13px; line-height: 1.6; color: #1A2332; font-family: inherit; resize: vertical; min-height: 120px; outline: none; background: #fff; transition: border-color .15s; }
+  .preview-area textarea:focus { border-color: #1D9E75; }
+  .preview-label { font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: #9CA3AF; margin-bottom: 6px; }
+  .send-actions { display: flex; gap: 10px; margin-top: 12px; }
+  .btn { display: inline-flex; align-items: center; gap: 7px; padding: 9px 16px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; border: none; transition: all .15s; }
+  .btn-primary { background: #1D9E75; color: #fff; }
+  .btn-primary:hover { background: #178A64; }
+  .btn-outline { background: #fff; color: #374151; border: 1px solid #E5E7EB; }
+  .btn-outline:hover { border-color: #1D9E75; color: #1D9E75; }
+  .btn-generate { background: #EEF2FF; color: #4338CA; border: 1px solid #C7D2FE; }
+  .btn-generate:hover { background: #E0E7FF; }
+  .btn-loading { opacity: .7; pointer-events: none; }
+
+  /* ===== BILAN CHECKLIST ===== */
+  .checklist { display: flex; flex-direction: column; gap: 10px; margin-bottom: 16px; }
+  .check-item { display: flex; align-items: flex-start; gap: 10px; background: #fff; border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 14px; }
+  .check-item input[type=checkbox] { margin-top: 2px; width: 16px; height: 16px; accent-color: #1D9E75; flex-shrink: 0; cursor: pointer; }
+  .check-item-content { flex: 1; }
+  .check-item-label { font-size: 13px; font-weight: 500; color: #1A2332; cursor: pointer; }
+  .check-item-extra { margin-top: 8px; display: none; }
+  .check-item-extra.visible { display: block; }
+  .check-item-extra input[type=text], .check-item-extra textarea { width: 100%; border: 1px solid #E5E7EB; border-radius: 7px; padding: 6px 10px; font-size: 12px; font-family: inherit; outline: none; color: #374151; }
+  .check-item-extra input[type=text]:focus, .check-item-extra textarea:focus { border-color: #1D9E75; }
+  .months-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .month-tag { padding: 3px 10px; border-radius: 20px; border: 1px solid #E5E7EB; font-size: 11px; font-weight: 500; cursor: pointer; background: #fff; color: #6B7280; transition: all .15s; }
+  .month-tag.selected { background: #1D9E75; color: #fff; border-color: #1D9E75; }
+
+  /* ===== LIBRE TAB ===== */
+  .libre-instructions { width: 100%; border: 1px solid #E5E7EB; border-radius: 10px; padding: 12px 14px; font-size: 13px; color: #1A2332; font-family: inherit; resize: vertical; min-height: 80px; outline: none; margin-bottom: 14px; }
+  .libre-instructions:focus { border-color: #1D9E75; }
+
+  /* ===== EMPTY STATE ===== */
+  .empty-panel { display: flex; align-items: center; justify-content: center; height: 100%; color: #9CA3AF; font-size: 14px; }
+
+  /* ===== SCROLLBAR ===== */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #E5E7EB; border-radius: 3px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header class="header">
+  <div class="header-brand">
+    <div class="logo">R</div>
+    <h1>Relance Cabinet <span>— Assistant IA</span></h1>
+  </div>
+  <div class="header-actions">
+    <div class="demo-toggle-wrap">
+      <label class="toggle-switch">
+        <input type="checkbox" id="demoToggle">
+        <span class="toggle-slider"></span>
+      </label>
+      <span class="demo-label" id="demoLabel">Mode démo</span>
+    </div>
+  </div>
+</header>
+
+<!-- DEMO BANNER -->
+<div class="demo-banner" id="demoBanner">
+  Mode démo actif — envois redirigés vers <strong id="demoBannerEmail"></strong> / <strong id="demoBannerPhone"></strong>
+</div>
+
+<!-- APP BODY -->
+<div class="app-body">
+
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="sidebar-header">
+      <div class="sidebar-title">Clients</div>
+      <div class="search-box">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="text" id="searchInput" placeholder="Rechercher un client…">
+      </div>
+    </div>
+    <div class="client-list" id="clientList"></div>
+  </aside>
+
+  <!-- MAIN -->
+  <main class="main">
+
+    <!-- CLIENT CARD -->
+    <div class="client-card" id="clientCard">
+      <div class="no-selection" id="noSelection">Sélectionnez un client dans la liste</div>
+      <div id="cardContent" style="display:none">
+        <div class="card-top">
+          <div>
+            <div class="card-name" id="cardName"></div>
+            <div class="card-meta" id="cardMeta"></div>
+          </div>
+          <div id="cardBadge"></div>
+        </div>
+        <div class="card-grid">
+          <div class="field-group">
+            <div class="field-label">Email</div>
+            <div class="editable-field">
+              <input type="text" id="fieldEmail" readonly>
+              <button class="edit-btn" onclick="toggleEdit('fieldEmail')" title="Modifier">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </div>
+          </div>
+          <div class="field-group">
+            <div class="field-label">Téléphone</div>
+            <div class="editable-field">
+              <input type="text" id="fieldPhone" readonly>
+              <button class="edit-btn" onclick="toggleEdit('fieldPhone')" title="Modifier">
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="card-controls">
+          <div class="field-group">
+            <div class="field-label">Ton de la relance</div>
+            <div class="ton-selector">
+              <button class="ton-btn active" data-ton="formel" onclick="selectTon(this)">Formel</button>
+              <button class="ton-btn" data-ton="neutre" onclick="selectTon(this)">Neutre</button>
+              <button class="ton-btn" data-ton="familier" onclick="selectTon(this)">Familier</button>
+            </div>
+          </div>
+          <div class="field-group ai-instructions">
+            <div class="field-label">Instructions IA</div>
+            <textarea id="aiInstructions" placeholder="Ex : Mentionner la deadline du 15, ne pas évoquer les pénalités…"></textarea>
+          </div>
+        </div>
+        <div class="history-section">
+          <div class="section-title">Historique des relances</div>
+          <table class="history-table">
+            <thead>
+              <tr>
+                <th>Date</th>
+                <th>Type</th>
+                <th>Canal</th>
+                <th>Statut réponse</th>
+              </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- RELANCE PANEL -->
+    <div class="relance-panel">
+      <div class="tabs-header">
+        <button class="tab-btn active" onclick="switchTab('tva', this)">TVA</button>
+        <button class="tab-btn" onclick="switchTab('pieces', this)">Pièces manquantes</button>
+        <button class="tab-btn" onclick="switchTab('bilan', this)">Bilan</button>
+        <button class="tab-btn" onclick="switchTab('libre', this)">Relance libre</button>
+      </div>
+      <div class="tabs-content">
+
+        <!-- TVA -->
+        <div class="tab-panel active" id="tab-tva">
+          <div id="tva-empty" class="empty-panel">Sélectionnez un client pour commencer</div>
+          <div id="tva-content" style="display:none">
+            <button class="btn btn-generate" onclick="generateMessage('tva')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="m15 2 7 0 0 7"/></svg>
+              Générer la relance
+            </button>
+            <div class="preview-area">
+              <div class="preview-label">Prévisualisation — éditable</div>
+              <textarea id="preview-tva" placeholder="Le message généré apparaîtra ici…"></textarea>
+            </div>
+            <div class="send-actions">
+              <button class="btn btn-primary" onclick="sendEmail('tva')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                Envoyer par email
+              </button>
+              <button class="btn btn-outline" onclick="sendSMS('tva')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Envoyer par SMS
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- PIÈCES MANQUANTES -->
+        <div class="tab-panel" id="tab-pieces">
+          <div id="pieces-empty" class="empty-panel">Sélectionnez un client pour commencer</div>
+          <div id="pieces-content" style="display:none">
+            <button class="btn btn-generate" onclick="generateMessage('pieces')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="m15 2 7 0 0 7"/></svg>
+              Générer la relance
+            </button>
+            <div class="preview-area">
+              <div class="preview-label">Prévisualisation — éditable</div>
+              <textarea id="preview-pieces" placeholder="Le message généré apparaîtra ici…"></textarea>
+            </div>
+            <div class="send-actions">
+              <button class="btn btn-primary" onclick="sendEmail('pieces')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                Envoyer par email
+              </button>
+              <button class="btn btn-outline" onclick="sendSMS('pieces')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Envoyer par SMS
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- BILAN -->
+        <div class="tab-panel" id="tab-bilan">
+          <div id="bilan-empty" class="empty-panel">Sélectionnez un client pour commencer</div>
+          <div id="bilan-content" style="display:none">
+            <div class="checklist">
+              <!-- Relevés bancaires -->
+              <div class="check-item">
+                <input type="checkbox" id="chk-releves" onchange="toggleExtra(this, 'extra-releves')">
+                <div class="check-item-content">
+                  <label class="check-item-label" for="chk-releves">Relevés bancaires</label>
+                  <div class="check-item-extra" id="extra-releves">
+                    <div class="field-label" style="margin-bottom:6px">Mois manquants</div>
+                    <div class="months-grid" id="monthsGrid"></div>
+                  </div>
+                </div>
+              </div>
+              <!-- Attestations Madelin -->
+              <div class="check-item">
+                <input type="checkbox" id="chk-madelin" onchange="toggleExtra(this, 'extra-madelin')">
+                <div class="check-item-content">
+                  <label class="check-item-label" for="chk-madelin">Attestations Madelin</label>
+                  <div class="check-item-extra" id="extra-madelin">
+                    <input type="text" placeholder="Nom de l'assureur (ex : AXA, Groupama…)">
+                  </div>
+                </div>
+              </div>
+              <!-- Tableau des immobilisations -->
+              <div class="check-item">
+                <input type="checkbox" id="chk-immo">
+                <div class="check-item-content">
+                  <label class="check-item-label" for="chk-immo">Tableau des immobilisations</label>
+                </div>
+              </div>
+              <!-- Contrats en cours -->
+              <div class="check-item">
+                <input type="checkbox" id="chk-contrats">
+                <div class="check-item-content">
+                  <label class="check-item-label" for="chk-contrats">Contrats en cours</label>
+                </div>
+              </div>
+              <!-- Autre -->
+              <div class="check-item">
+                <input type="checkbox" id="chk-autre" onchange="toggleExtra(this, 'extra-autre')">
+                <div class="check-item-content">
+                  <label class="check-item-label" for="chk-autre">Autre</label>
+                  <div class="check-item-extra" id="extra-autre">
+                    <input type="text" placeholder="Précisez le document manquant…">
+                  </div>
+                </div>
+              </div>
+            </div>
+            <button class="btn btn-generate" onclick="generateMessage('bilan')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="m15 2 7 0 0 7"/></svg>
+              Générer la relance
+            </button>
+            <div class="preview-area">
+              <div class="preview-label">Prévisualisation — éditable</div>
+              <textarea id="preview-bilan" placeholder="Le message généré apparaîtra ici…"></textarea>
+            </div>
+            <div class="send-actions">
+              <button class="btn btn-primary" onclick="sendEmail('bilan')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                Envoyer par email
+              </button>
+              <button class="btn btn-outline" onclick="sendSMS('bilan')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Envoyer par SMS
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- RELANCE LIBRE -->
+        <div class="tab-panel" id="tab-libre">
+          <div id="libre-empty" class="empty-panel">Sélectionnez un client pour commencer</div>
+          <div id="libre-content" style="display:none">
+            <div class="field-label" style="margin-bottom:6px">Décrivez le besoin de relance</div>
+            <textarea class="libre-instructions" id="libreInstructions" placeholder="Ex : Le client n'a pas fourni ses justificatifs de frais de déplacement depuis 3 mois malgré 2 rappels. Relancer poliment mais fermement."></textarea>
+            <button class="btn btn-generate" onclick="generateMessage('libre')">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="m15 2 7 0 0 7"/></svg>
+              Générer la relance
+            </button>
+            <div class="preview-area">
+              <div class="preview-label">Prévisualisation — éditable</div>
+              <textarea id="preview-libre" placeholder="Le message généré apparaîtra ici…"></textarea>
+            </div>
+            <div class="send-actions">
+              <button class="btn btn-primary" onclick="sendEmail('libre')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/></svg>
+                Envoyer par email
+              </button>
+              <button class="btn btn-outline" onclick="sendSMS('libre')">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                Envoyer par SMS
+              </button>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </main>
+</div>
+
+<script>
+// ===== CONFIGURATION =====
+const DEMO_EMAIL = 'demo@cabinet-test.fr';
+const DEMO_PHONE = '+33600000000';
+const CLAUDE_API_KEY = '';        // TODO: clé API Anthropic
+const N8N_WEBHOOK_URL = '';       // TODO: URL webhook n8n SMTP
+const TWILIO_ACCOUNT_SID = '';    // TODO: SID Twilio
+const TWILIO_AUTH_TOKEN = '';     // TODO: token Twilio
+const TWILIO_PHONE_FROM = '';     // TODO: numéro expéditeur Twilio
+
+// ===== DONNÉES FICTIVES =====
+const clients = [
+  {
+    id: 1,
+    nom: 'SARL Martin Plomberie',
+    forme: 'SARL',
+    secteur: 'Artisanat / Plomberie',
+    email: 'g.martin@martin-plomberie.fr',
+    telephone: '06 12 34 56 78',
+    statut: 'pending',
+    historique: [
+      { date: '2026-04-10', type: 'TVA', canal: 'Email', reponse: 'Non répondu' },
+      { date: '2026-03-25', type: 'Pièces manquantes', canal: 'SMS', reponse: 'Répondu' },
+      { date: '2026-02-14', type: 'Bilan', canal: 'Email', reponse: 'Répondu' }
+    ]
+  },
+  {
+    id: 2,
+    nom: 'SCI Dupont Patrimoine',
+    forme: 'SCI',
+    secteur: 'Immobilier / Gestion patrimoine',
+    email: 'contact@dupont-patrimoine.fr',
+    telephone: '06 98 76 54 32',
+    statut: 'noreply',
+    historique: [
+      { date: '2026-04-28', type: 'Bilan', canal: 'Email', reponse: 'Non répondu' },
+      { date: '2026-04-05', type: 'TVA', canal: 'Email', reponse: 'Non répondu' }
+    ]
+  },
+  {
+    id: 3,
+    nom: 'Dr. Renard',
+    forme: 'BNC',
+    secteur: 'Profession libérale / Médecine',
+    email: 'cabinet.renard@wanadoo.fr',
+    telephone: '06 55 44 33 22',
+    statut: 'ok',
+    historique: [
+      { date: '2026-04-20', type: 'TVA', canal: 'Email', reponse: 'Répondu' },
+      { date: '2026-03-10', type: 'Relance libre', canal: 'SMS', reponse: 'Répondu' },
+      { date: '2026-01-15', type: 'Bilan', canal: 'Email', reponse: 'Répondu' }
+    ]
+  },
+  {
+    id: 4,
+    nom: 'SARL Le Gaulois',
+    forme: 'SARL',
+    secteur: 'Restauration / CHR',
+    email: 'compta@legaulois-restaurant.fr',
+    telephone: '06 11 22 33 44',
+    statut: 'pending',
+    historique: [
+      { date: '2026-05-02', type: 'Pièces manquantes', canal: 'Email', reponse: 'En attente' },
+      { date: '2026-04-15', type: 'TVA', canal: 'SMS', reponse: 'Répondu' }
+    ]
+  },
+  {
+    id: 5,
+    nom: 'EURL TechPulse',
+    forme: 'EURL',
+    secteur: 'Tech / Conseil digital',
+    email: 'admin@techpulse.io',
+    telephone: '06 77 88 99 00',
+    statut: 'noreply',
+    historique: [
+      { date: '2026-05-08', type: 'Bilan', canal: 'Email', reponse: 'Non répondu' },
+      { date: '2026-04-22', type: 'Pièces manquantes', canal: 'Email', reponse: 'Non répondu' },
+      { date: '2026-03-30', type: 'TVA', canal: 'SMS', reponse: 'Répondu' }
+    ]
+  }
+];
+
+// ===== ÉTAT =====
+let selectedClientId = null;
+let demoMode = false;
+let selectedTon = 'formel';
+const selectedMonths = new Set();
+
+// ===== STATUTS =====
+const statusMap = {
+  pending: { label: 'Relance en attente', cls: 'badge-pending' },
+  ok:      { label: 'À jour',             cls: 'badge-ok' },
+  noreply: { label: 'Non répondu',        cls: 'badge-noreply' }
+};
+
+const responseMap = {
+  'Répondu':     'resp-yes',
+  'Non répondu': 'resp-no',
+  'En attente':  'resp-pending'
+};
+
+// ===== MOIS =====
+const MONTHS = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Jun', 'Jul', 'Aoû', 'Sep', 'Oct', 'Nov', 'Déc'];
+
+function buildMonthsGrid() {
+  const grid = document.getElementById('monthsGrid');
+  grid.innerHTML = '';
+  MONTHS.forEach((m, i) => {
+    const tag = document.createElement('span');
+    tag.className = 'month-tag';
+    tag.textContent = m;
+    tag.dataset.month = i;
+    tag.onclick = () => {
+      tag.classList.toggle('selected');
+      if (tag.classList.contains('selected')) selectedMonths.add(m);
+      else selectedMonths.delete(m);
+    };
+    grid.appendChild(tag);
+  });
+}
+
+// ===== DEMO MODE =====
+document.getElementById('demoToggle').addEventListener('change', function() {
+  demoMode = this.checked;
+  const banner = document.getElementById('demoBanner');
+  const label = document.getElementById('demoLabel');
+  if (demoMode) {
+    banner.classList.add('visible');
+    document.getElementById('demoBannerEmail').textContent = DEMO_EMAIL;
+    document.getElementById('demoBannerPhone').textContent = DEMO_PHONE;
+    label.textContent = 'Mode démo actif';
+    label.classList.add('demo-active-text');
+  } else {
+    banner.classList.remove('visible');
+    label.textContent = 'Mode démo';
+    label.classList.remove('demo-active-text');
+  }
+});
+
+// ===== RENDU SIDEBAR =====
+function renderClientList(filter = '') {
+  const list = document.getElementById('clientList');
+  list.innerHTML = '';
+  const filtered = clients.filter(c => c.nom.toLowerCase().includes(filter.toLowerCase()));
+  filtered.forEach(c => {
+    const s = statusMap[c.statut];
+    const div = document.createElement('div');
+    div.className = 'client-item' + (c.id === selectedClientId ? ' active' : '');
+    div.innerHTML = `
+      <div class="client-item-name">${c.nom}</div>
+      <div class="client-item-sub">${c.forme} · ${c.secteur}</div>
+      <span class="badge ${s.cls}">${s.label}</span>
+    `;
+    div.onclick = () => selectClient(c.id);
+    list.appendChild(div);
+  });
+}
+
+document.getElementById('searchInput').addEventListener('input', function() {
+  renderClientList(this.value);
+});
+
+// ===== SÉLECTION CLIENT =====
+function selectClient(id) {
+  selectedClientId = id;
+  const c = clients.find(x => x.id === id);
+  if (!c) return;
+
+  renderClientList(document.getElementById('searchInput').value);
+
+  document.getElementById('noSelection').style.display = 'none';
+  document.getElementById('cardContent').style.display = 'block';
+
+  document.getElementById('cardName').textContent = c.nom;
+  document.getElementById('cardMeta').textContent = `${c.forme} · ${c.secteur}`;
+
+  const s = statusMap[c.statut];
+  document.getElementById('cardBadge').innerHTML = `<span class="badge ${s.cls}">${s.label}</span>`;
+
+  const emailField = document.getElementById('fieldEmail');
+  const phoneField = document.getElementById('fieldPhone');
+  emailField.value = c.email;
+  phoneField.value = c.telephone;
+  emailField.classList.remove('editing');
+  phoneField.classList.remove('editing');
+  emailField.readOnly = true;
+  phoneField.readOnly = true;
+
+  document.getElementById('aiInstructions').value = '';
+
+  const tbody = document.getElementById('historyBody');
+  tbody.innerHTML = '';
+  c.historique.forEach(h => {
+    const tr = document.createElement('tr');
+    const respCls = responseMap[h.reponse] || 'resp-pending';
+    tr.innerHTML = `
+      <td>${formatDate(h.date)}</td>
+      <td>${h.type}</td>
+      <td>${h.canal}</td>
+      <td><span class="resp-badge ${respCls}">${h.reponse}</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  // Afficher les contenus de tabs
+  ['tva', 'pieces', 'bilan', 'libre'].forEach(t => {
+    document.getElementById(`${t}-empty`).style.display = 'none';
+    document.getElementById(`${t}-content`).style.display = 'block';
+  });
+
+  // Reset previews
+  ['tva', 'pieces', 'bilan', 'libre'].forEach(t => {
+    const el = document.getElementById(`preview-${t}`);
+    if (el) el.value = '';
+  });
+}
+
+function formatDate(iso) {
+  const [y, m, d] = iso.split('-');
+  return `${d}/${m}/${y}`;
+}
+
+// ===== ÉDITION INLINE =====
+function toggleEdit(fieldId) {
+  const input = document.getElementById(fieldId);
+  if (input.readOnly) {
+    input.readOnly = false;
+    input.classList.add('editing');
+    input.focus();
+  } else {
+    input.readOnly = true;
+    input.classList.remove('editing');
+    if (selectedClientId) {
+      const c = clients.find(x => x.id === selectedClientId);
+      if (fieldId === 'fieldEmail') c.email = input.value;
+      if (fieldId === 'fieldPhone') c.telephone = input.value;
+    }
+  }
+}
+
+// ===== TON =====
+function selectTon(btn) {
+  document.querySelectorAll('.ton-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  selectedTon = btn.dataset.ton;
+}
+
+// ===== TABS =====
+function switchTab(name, btn) {
+  document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`tab-${name}`).classList.add('active');
+}
+
+// ===== CHECKLIST BILAN =====
+function toggleExtra(checkbox, extraId) {
+  const extra = document.getElementById(extraId);
+  if (checkbox.checked) extra.classList.add('visible');
+  else extra.classList.remove('visible');
+}
+
+// ===== GÉNÉRATION IA =====
+function buildPrompt(type) {
+  const c = clients.find(x => x.id === selectedClientId);
+  const instructions = document.getElementById('aiInstructions').value;
+  const tonLabel = { formel: 'formel et professionnel', neutre: 'neutre et courtois', familier: 'chaleureux et familier' }[selectedTon];
+
+  let context = '';
+  if (type === 'tva') {
+    context = `Relance TVA : rappeler au client qu'il doit transmettre ses éléments de TVA pour la période en cours.`;
+  } else if (type === 'pieces') {
+    context = `Relance pièces manquantes : le client n'a pas fourni certains justificatifs. Mentionner les comptes 471 (sommes reçues d'avance) et les opérations non lettrées au bilan.`;
+  } else if (type === 'bilan') {
+    const items = [];
+    if (document.getElementById('chk-releves').checked) {
+      const months = [...selectedMonths].join(', ') || 'non précisés';
+      items.push(`relevés bancaires (mois manquants : ${months})`);
+    }
+    if (document.getElementById('chk-madelin').checked) {
+      const assureur = document.querySelector('#extra-madelin input')?.value || '';
+      items.push(`attestations Madelin${assureur ? ` (assureur : ${assureur})` : ''}`);
+    }
+    if (document.getElementById('chk-immo').checked) items.push('tableau des immobilisations');
+    if (document.getElementById('chk-contrats').checked) items.push('contrats en cours');
+    if (document.getElementById('chk-autre').checked) {
+      const autre = document.querySelector('#extra-autre input')?.value || '';
+      items.push(autre || 'document non précisé');
+    }
+    context = `Relance bilan : documents manquants — ${items.length ? items.join(', ') : 'non sélectionnés'}.`;
+  } else if (type === 'libre') {
+    context = document.getElementById('libreInstructions').value || 'Relance générale sans contexte spécifique.';
+  }
+
+  return `Tu es l'assistant d'un cabinet d'expertise comptable. Rédige un message de relance client avec un ton ${tonLabel}.
+Client : ${c.nom} (${c.forme}, secteur : ${c.secteur}).
+Email : ${c.email} | Tél : ${c.telephone}.
+Contexte : ${context}
+${instructions ? `Instructions supplémentaires : ${instructions}` : ''}
+Rédige uniquement le corps du message, sans objet email. Sois concis (5-8 lignes max).`;
+}
+
+async function generateMessage(type) {
+  if (!selectedClientId) return;
+  const btn = event.currentTarget;
+  btn.classList.add('btn-loading');
+  btn.textContent = 'Génération…';
+
+  // TODO: appel API Claude
+  // const response = await callClaudeAPI(buildPrompt(type));
+  // document.getElementById(`preview-${type}`).value = response;
+
+  // Simulation pour la démo
+  await new Promise(r => setTimeout(r, 1200));
+  const c = clients.find(x => x.id === selectedClientId);
+  const samples = {
+    tva: `Madame, Monsieur,\n\nNous revenons vers vous concernant la déclaration de TVA du mois en cours.\n\nSauf erreur de notre part, nous n'avons pas encore reçu les éléments nécessaires à l'établissement de votre déclaration (factures de ventes, relevés d'achats).\n\nPourriez-vous nous les transmettre dans les meilleurs délais afin d'éviter tout retard de dépôt ?\n\nNous restons disponibles pour toute question.\n\nCordialement,\nVotre cabinet comptable`,
+    pieces: `Madame, Monsieur,\n\nNotre revue des comptes fait apparaître plusieurs éléments en attente :\n• Des soldes au compte 471 (sommes reçues d'avance) nécessitent des justificatifs\n• Des opérations non lettrées subsistent au bilan\n\nMerci de nous transmettre les pièces correspondantes afin de solder ces écritures.\n\nCordialement,\nVotre cabinet comptable`,
+    bilan: `Madame, Monsieur,\n\nDans le cadre de l'établissement de votre bilan annuel, nous avons besoin de compléter votre dossier avec plusieurs documents manquants.\n\nMerci de nous les faire parvenir dès que possible afin de respecter les délais légaux de dépôt.\n\nNous restons à votre disposition.\n\nCordialement,\nVotre cabinet comptable`,
+    libre: `Madame, Monsieur,\n\nNous revenons vers vous suite à notre dernière communication.\n\nMerci de nous apporter les éléments attendus afin que nous puissions finaliser votre dossier.\n\nCordialement,\nVotre cabinet comptable`
+  };
+  document.getElementById(`preview-${type}`).value = samples[type] || '';
+
+  btn.classList.remove('btn-loading');
+  btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="m15 2 7 0 0 7"/></svg> Générer la relance`;
+}
+
+// ===== ENVOI EMAIL =====
+async function sendEmail(type) {
+  if (!selectedClientId) return;
+  const c = clients.find(x => x.id === selectedClientId);
+  const message = document.getElementById(`preview-${type}`).value;
+  if (!message.trim()) { alert('Générez d\'abord un message avant d\'envoyer.'); return; }
+
+  const recipient = demoMode ? DEMO_EMAIL : c.email;
+
+  // TODO: appel webhook n8n
+  // await fetch(N8N_WEBHOOK_URL, {
+  //   method: 'POST',
+  //   headers: { 'Content-Type': 'application/json' },
+  //   body: JSON.stringify({ to: recipient, subject: `Relance ${type} — ${c.nom}`, body: message, client: c.nom })
+  // });
+
+  alert(`Email ${demoMode ? '[DÉMO] ' : ''}envoyé à : ${recipient}`);
+}
+
+// ===== ENVOI SMS =====
+async function sendSMS(type) {
+  if (!selectedClientId) return;
+  const c = clients.find(x => x.id === selectedClientId);
+  const message = document.getElementById(`preview-${type}`).value;
+  if (!message.trim()) { alert('Générez d\'abord un message avant d\'envoyer.'); return; }
+
+  const recipient = demoMode ? DEMO_PHONE : c.telephone;
+
+  // TODO: appel API Twilio
+  // const creds = btoa(`${TWILIO_ACCOUNT_SID}:${TWILIO_AUTH_TOKEN}`);
+  // await fetch(`https://api.twilio.com/2010-04-01/Accounts/${TWILIO_ACCOUNT_SID}/Messages.json`, {
+  //   method: 'POST',
+  //   headers: { 'Authorization': `Basic ${creds}`, 'Content-Type': 'application/x-www-form-urlencoded' },
+  //   body: new URLSearchParams({ From: TWILIO_PHONE_FROM, To: recipient, Body: message.substring(0, 160) })
+  // });
+
+  alert(`SMS ${demoMode ? '[DÉMO] ' : ''}envoyé à : ${recipient}`);
+}
+
+// ===== INIT =====
+buildMonthsGrid();
+renderClientList();
+</script>
+</body>
+</html>
