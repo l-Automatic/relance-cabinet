@@ -137,6 +137,12 @@
   /* ===== EMPTY STATE ===== */
   .empty-panel { display: flex; align-items: center; justify-content: center; height: 100%; color: #9CA3AF; font-size: 14px; }
 
+  /* ===== FEEDBACK ENVOI ===== */
+  .send-feedback { font-size: 12px; font-weight: 600; margin-top: 8px; padding: 5px 10px; border-radius: 6px; display: inline-block; }
+  .send-feedback-ok  { background: #D1FAE5; color: #065F46; }
+  .send-feedback-err { background: #FEE2E2; color: #991B1B; }
+  #demoEmailInput { background: transparent; border: none; border-bottom: 1px dashed #92400E; color: #92400E; font-size: 12px; font-weight: 700; outline: none; width: 200px; text-align: center; }
+
   /* ===== SCROLLBAR ===== */
   ::-webkit-scrollbar { width: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -164,7 +170,9 @@
 
 <!-- DEMO BANNER -->
 <div class="demo-banner" id="demoBanner">
-  Mode démo actif — envois redirigés vers <strong id="demoBannerEmail"></strong> / <strong id="demoBannerPhone"></strong>
+  Mode démo actif — email de test :
+  <input id="demoEmailInput" type="email" value="demo@cabinet-test.fr" title="Cliquez pour modifier l'email de test">
+  / tél : <strong id="demoBannerPhone"></strong>
 </div>
 
 <!-- APP BODY -->
@@ -416,7 +424,7 @@
 const DEMO_EMAIL = 'demo@cabinet-test.fr';
 const DEMO_PHONE = '+33600000000';
 // CLAUDE_API_KEY : définie dans les variables d'environnement Netlify (jamais dans le code)
-const N8N_WEBHOOK_URL = '';       // TODO: URL webhook n8n SMTP
+const N8N_WEBHOOK_URL = 'https://n8n.srv893111.hstgr.cloud/webhook/relance-cabinet';
 const TWILIO_ACCOUNT_SID = '';    // TODO: SID Twilio
 const TWILIO_AUTH_TOKEN = '';     // TODO: token Twilio
 const TWILIO_PHONE_FROM = '';     // TODO: numéro expéditeur Twilio
@@ -539,7 +547,6 @@ document.getElementById('demoToggle').addEventListener('change', function() {
   const label = document.getElementById('demoLabel');
   if (demoMode) {
     banner.classList.add('visible');
-    document.getElementById('demoBannerEmail').textContent = DEMO_EMAIL;
     document.getElementById('demoBannerPhone').textContent = DEMO_PHONE;
     label.textContent = 'Mode démo actif';
     label.classList.add('demo-active-text');
@@ -601,6 +608,22 @@ function selectClient(id) {
 
   document.getElementById('aiInstructions').value = '';
 
+  renderHistory(c);
+
+  // Afficher les contenus de tabs
+  ['tva', 'pieces', 'bilan', 'libre'].forEach(t => {
+    document.getElementById(`${t}-empty`).style.display = 'none';
+    document.getElementById(`${t}-content`).style.display = 'block';
+  });
+
+  // Reset previews
+  ['tva', 'pieces', 'bilan', 'libre'].forEach(t => {
+    const el = document.getElementById(`preview-${t}`);
+    if (el) el.value = '';
+  });
+}
+
+function renderHistory(c) {
   const tbody = document.getElementById('historyBody');
   tbody.innerHTML = '';
   c.historique.forEach(h => {
@@ -613,18 +636,6 @@ function selectClient(id) {
       <td><span class="resp-badge ${respCls}">${h.reponse}</span></td>
     `;
     tbody.appendChild(tr);
-  });
-
-  // Afficher les contenus de tabs
-  ['tva', 'pieces', 'bilan', 'libre'].forEach(t => {
-    document.getElementById(`${t}-empty`).style.display = 'none';
-    document.getElementById(`${t}-content`).style.display = 'block';
-  });
-
-  // Reset previews
-  ['tva', 'pieces', 'bilan', 'libre'].forEach(t => {
-    const el = document.getElementById(`preview-${t}`);
-    if (el) el.value = '';
   });
 }
 
@@ -747,22 +758,70 @@ async function generateMessage(type) {
 }
 
 // ===== ENVOI EMAIL =====
+const TYPE_LABELS = { tva: 'TVA', pieces: 'Pièces manquantes', bilan: 'Bilan', libre: 'Relance libre' };
+
 async function sendEmail(type) {
   if (!selectedClientId) return;
   const c = clients.find(x => x.id === selectedClientId);
   const message = document.getElementById(`preview-${type}`).value;
   if (!message.trim()) { alert('Générez d\'abord un message avant d\'envoyer.'); return; }
 
-  const recipient = demoMode ? DEMO_EMAIL : c.email;
+  const btn = event.currentTarget;
+  const actionsDiv = btn.closest('.send-actions');
 
-  // TODO: appel webhook n8n
-  // await fetch(N8N_WEBHOOK_URL, {
-  //   method: 'POST',
-  //   headers: { 'Content-Type': 'application/json' },
-  //   body: JSON.stringify({ to: recipient, subject: `Relance ${type} — ${c.nom}`, body: message, client: c.nom })
-  // });
+  let feedback = actionsDiv.nextElementSibling;
+  if (!feedback || !feedback.classList.contains('send-feedback')) {
+    feedback = document.createElement('div');
+    feedback.className = 'send-feedback';
+    actionsDiv.after(feedback);
+  }
+  feedback.className = 'send-feedback';
+  feedback.textContent = '';
 
-  alert(`Email ${demoMode ? '[DÉMO] ' : ''}envoyé à : ${recipient}`);
+  const demoEmailInput = document.getElementById('demoEmailInput');
+  const recipient = demoMode ? (demoEmailInput?.value?.trim() || DEMO_EMAIL) : c.email;
+  const finalMessage = demoMode ? `⚠️ CECI EST UN EMAIL DE TEST — Mode démo actif\n\n${message}` : message;
+  const subject = `Relance ${TYPE_LABELS[type]} — ${c.nom}`;
+
+  const originalHTML = btn.innerHTML;
+  btn.disabled = true;
+  btn.textContent = 'Envoi…';
+
+  try {
+    const res = await fetch(N8N_WEBHOOK_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        body: {
+          contact: {
+            sourceURL: 'https://dashboard-cabinet.netlify.app',
+            fields: [
+              {},
+              { value: demoMode ? 'Testeur Démo' : c.nom }
+            ]
+          },
+          relance: { subject, message: finalMessage }
+        },
+        envelope: { to: [recipient] }
+      })
+    });
+
+    if (!res.ok) throw new Error(`Erreur serveur (${res.status})`);
+
+    feedback.textContent = 'Email envoyé ✓';
+    feedback.classList.add('send-feedback-ok');
+
+    const today = new Date().toISOString().split('T')[0];
+    c.historique.unshift({ date: today, type: TYPE_LABELS[type], canal: 'Email', reponse: 'Envoyé' });
+    renderHistory(c);
+
+  } catch (err) {
+    feedback.textContent = 'Erreur d\'envoi — réessayez';
+    feedback.classList.add('send-feedback-err');
+  }
+
+  btn.disabled = false;
+  btn.innerHTML = originalHTML;
 }
 
 // ===== ENVOI SMS =====
