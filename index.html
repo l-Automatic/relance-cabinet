@@ -674,43 +674,71 @@ function toggleExtra(checkbox, extraId) {
 }
 
 // ===== GÉNÉRATION IA =====
-function buildPrompt(type) {
+function buildPrompts(type) {
   const c = clients.find(x => x.id === selectedClientId);
-  const instructions = document.getElementById('aiInstructions').value;
+  const instructions = document.getElementById('aiInstructions').value.trim();
   const tonLabel = { formel: 'formel et professionnel', neutre: 'neutre et courtois', familier: 'chaleureux et familier' }[selectedTon];
 
-  let context = '';
+  const system = `Tu es l'assistant d'un cabinet d'expertise comptable. Tu rédiges des messages de relance clients courts (5 à 8 lignes maximum), directement utilisables sans modification. Le message doit être adapté au ton demandé, signé "Le cabinet", et ne contenir que le corps du message — pas d'objet email, pas de commentaire, pas de balise.`;
+
+  let contextSpecifique = '';
   if (type === 'tva') {
-    context = `Relance TVA : rappeler au client qu'il doit transmettre ses éléments de TVA pour la période en cours.`;
+    contextSpecifique = `Objet : relance TVA. Le client doit transmettre ses éléments de TVA (factures de ventes, relevés d'achats) pour la période en cours.`;
   } else if (type === 'pieces') {
-    context = `Relance pièces manquantes : le client n'a pas fourni certains justificatifs. Mentionner les comptes 471 (sommes reçues d'avance) et les opérations non lettrées au bilan.`;
+    contextSpecifique = `Objet : relance pièces manquantes. Mentionner explicitement les comptes 471 (sommes reçues d'avance ou en attente d'affectation) et les opérations non lettrées au bilan qui nécessitent des justificatifs.`;
   } else if (type === 'bilan') {
     const items = [];
     if (document.getElementById('chk-releves').checked) {
-      const months = [...selectedMonths].join(', ') || 'non précisés';
+      const months = [...selectedMonths].join(', ') || 'mois non précisés';
       items.push(`relevés bancaires (mois manquants : ${months})`);
     }
     if (document.getElementById('chk-madelin').checked) {
-      const assureur = document.querySelector('#extra-madelin input')?.value || '';
+      const assureur = document.querySelector('#extra-madelin input')?.value?.trim() || '';
       items.push(`attestations Madelin${assureur ? ` (assureur : ${assureur})` : ''}`);
     }
     if (document.getElementById('chk-immo').checked) items.push('tableau des immobilisations');
     if (document.getElementById('chk-contrats').checked) items.push('contrats en cours');
     if (document.getElementById('chk-autre').checked) {
-      const autre = document.querySelector('#extra-autre input')?.value || '';
-      items.push(autre || 'document non précisé');
+      const autre = document.querySelector('#extra-autre input')?.value?.trim() || '';
+      items.push(autre || 'document complémentaire non précisé');
     }
-    context = `Relance bilan : documents manquants — ${items.length ? items.join(', ') : 'non sélectionnés'}.`;
+    contextSpecifique = `Objet : relance bilan. Documents manquants pour l'établissement du bilan — ${items.length ? items.join(', ') : 'aucun élément sélectionné'}.`;
   } else if (type === 'libre') {
-    context = document.getElementById('libreInstructions').value || 'Relance générale sans contexte spécifique.';
+    contextSpecifique = document.getElementById('libreInstructions').value?.trim() || 'Relance générale, contexte non précisé.';
   }
 
-  return `Tu es l'assistant d'un cabinet d'expertise comptable. Rédige un message de relance client avec un ton ${tonLabel}.
-Client : ${c.nom} (${c.forme}, secteur : ${c.secteur}).
-Email : ${c.email} | Tél : ${c.telephone}.
-Contexte : ${context}
-${instructions ? `Instructions supplémentaires : ${instructions}` : ''}
-Rédige uniquement le corps du message, sans objet email. Sois concis (5-8 lignes max).`;
+  const user = `Client : ${c.nom} (${c.forme}, secteur : ${c.secteur})
+Ton : ${tonLabel}
+${contextSpecifique}${instructions ? `\nInstructions supplémentaires : ${instructions}` : ''}
+
+Rédige le message de relance.`;
+
+  return { system, user };
+}
+
+async function callClaudeAPI(system, user) {
+  if (!CLAUDE_API_KEY) throw new Error('CLAUDE_API_KEY non configurée dans les constantes du fichier');
+  const response = await fetch('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': CLAUDE_API_KEY,
+      'anthropic-version': '2023-06-01',
+      'anthropic-dangerous-direct-browser-calls': 'true'
+    },
+    body: JSON.stringify({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 512,
+      system,
+      messages: [{ role: 'user', content: user }]
+    })
+  });
+  if (!response.ok) {
+    const err = await response.json().catch(() => ({}));
+    throw new Error(err?.error?.message || `Erreur API (${response.status})`);
+  }
+  const data = await response.json();
+  return data.content?.[0]?.text || '';
 }
 
 async function generateMessage(type) {
@@ -718,21 +746,15 @@ async function generateMessage(type) {
   const btn = event.currentTarget;
   btn.classList.add('btn-loading');
   btn.textContent = 'Génération…';
+  const preview = document.getElementById(`preview-${type}`);
 
-  // TODO: appel API Claude
-  // const response = await callClaudeAPI(buildPrompt(type));
-  // document.getElementById(`preview-${type}`).value = response;
-
-  // Simulation pour la démo
-  await new Promise(r => setTimeout(r, 1200));
-  const c = clients.find(x => x.id === selectedClientId);
-  const samples = {
-    tva: `Madame, Monsieur,\n\nNous revenons vers vous concernant la déclaration de TVA du mois en cours.\n\nSauf erreur de notre part, nous n'avons pas encore reçu les éléments nécessaires à l'établissement de votre déclaration (factures de ventes, relevés d'achats).\n\nPourriez-vous nous les transmettre dans les meilleurs délais afin d'éviter tout retard de dépôt ?\n\nNous restons disponibles pour toute question.\n\nCordialement,\nVotre cabinet comptable`,
-    pieces: `Madame, Monsieur,\n\nNotre revue des comptes fait apparaître plusieurs éléments en attente :\n• Des soldes au compte 471 (sommes reçues d'avance) nécessitent des justificatifs\n• Des opérations non lettrées subsistent au bilan\n\nMerci de nous transmettre les pièces correspondantes afin de solder ces écritures.\n\nCordialement,\nVotre cabinet comptable`,
-    bilan: `Madame, Monsieur,\n\nDans le cadre de l'établissement de votre bilan annuel, nous avons besoin de compléter votre dossier avec plusieurs documents manquants.\n\nMerci de nous les faire parvenir dès que possible afin de respecter les délais légaux de dépôt.\n\nNous restons à votre disposition.\n\nCordialement,\nVotre cabinet comptable`,
-    libre: `Madame, Monsieur,\n\nNous revenons vers vous suite à notre dernière communication.\n\nMerci de nous apporter les éléments attendus afin que nous puissions finaliser votre dossier.\n\nCordialement,\nVotre cabinet comptable`
-  };
-  document.getElementById(`preview-${type}`).value = samples[type] || '';
+  try {
+    const { system, user } = buildPrompts(type);
+    const message = await callClaudeAPI(system, user);
+    preview.value = message;
+  } catch (err) {
+    preview.value = `⚠️ Erreur lors de la génération : ${err.message}`;
+  }
 
   btn.classList.remove('btn-loading');
   btn.innerHTML = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10"/><path d="M22 2 12 12"/><path d="m15 2 7 0 0 7"/></svg> Générer la relance`;
